@@ -1,4 +1,16 @@
-function Sidebar() {
+const coordinatorMenuItems = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "candidates", label: "Candidates" },
+  { id: "activities", label: "Activities" },
+  { id: "assignments", label: "Assignments" }
+];
+
+function Sidebar({
+  activePage,
+  onNavigate,
+  menuItems = coordinatorMenuItems,
+  onLogout
+}) {
   return (
     <aside className="sidebar">
       <h2 className="logo">Track<span>.</span></h2>
@@ -6,16 +18,30 @@ function Sidebar() {
       <p className="menu-title">MENU</p>
 
       <nav>
-        <div className="nav-item active">Dashboard</div>
-        <div className="nav-item">Candidates</div>
-        <div className="nav-item">Activities</div>
-        <div className="nav-item">Assignments</div>
+        {menuItems.map((item) => (
+          <button
+            className={`nav-item${activePage === item.id ? " active" : ""}`}
+            type="button"
+            key={item.id}
+            onClick={() => onNavigate(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
       </nav>
 
       <div className="sidebar-bottom">
         <p className="menu-title">ACCOUNT</p>
-        <div className="nav-item">Settings</div>
-        <div className="nav-item">Logout</div>
+        {onLogout ? (
+          <button className="nav-item" type="button" onClick={onLogout}>
+            Logout
+          </button>
+        ) : (
+          <>
+            <div className="nav-item">Settings</div>
+            <div className="nav-item">Logout</div>
+          </>
+        )}
       </div>
     </aside>
   );

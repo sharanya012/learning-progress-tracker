@@ -1,92 +1,51 @@
-import pool from "../db.js";
-
-function unauthorized(res, message) {
-  res.status(401).json({ message });
-}
-
-function clearInvalidSession(req, res) {
-  if (!req.session) {
-    unauthorized(res, "Session is no longer valid.");
-    return;
-  }
-
-  req.session.destroy(() => {
-    unauthorized(res, "Session is no longer valid.");
-  });
-}
+import pool from "../config/db.js";
 
 export async function requireAuth(req, res, next) {
-  const accountId = Number(req.session?.account?.id);
-  const sessionVersion = Number(req.session?.account?.sessionVersion);
-
-  if (!Number.isInteger(accountId) || !Number.isInteger(sessionVersion)) {
-    unauthorized(res, "Authentication required.");
-    return;
-  }
-
   try {
+    if (!req.session.accountId) {
+      return res.status(401).json({ message: "Please log in." });
+    }
+
     const result = await pool.query(
-      `SELECT id, role, session_version, must_change_password, temporary_password_expires_at
-       FROM accounts
-       WHERE id = $1`,
-      [accountId]
+      `SELECT id, email, role, must_change_password,
+              session_version
+       FROM accounts WHERE id = $1`,
+      [req.session.accountId]
     );
 
     const account = result.rows[0];
 
-    if (!account || Number(account.session_version) !== sessionVersion) {
-      clearInvalidSession(req, res);
-      return;
+    if (
+      !account ||
+      account.session_version !== req.session.sessionVersion
+    ) {
+      return res.status(401).json({ message: "Session expired." });
     }
 
-    req.user = {
-      id: account.id,
-      role: account.role,
-      mustChangePassword: account.must_change_password,
-      temporaryPasswordExpiresAt: account.temporary_password_expires_at,
-      sessionVersion: account.session_version,
-    };
-
+    req.account = account;
     next();
   } catch (error) {
-    console.error("Authentication lookup failed:", error?.code || "unknown");
-    res.status(500).json({ message: "Authentication could not be verified." });
+    next(error);
   }
 }
 
-function requireRole(role) {
-  return function requireRoleMiddleware(req, res, next) {
-    if (!req.user) {
-      unauthorized(res, "Authentication required.");
-      return;
+export function allowRoles(...roles) {
+  return (req, res, next) => {
+    if (!req.account || !roles.includes(req.account.role)) {
+      return res.status(403).json({
+        message: "You do not have permission to access this resource."
+      });
     }
 
-    if (req.user.role !== role) {
-      res.status(403).json({ message: "You do not have access to this resource." });
-      return;
+    if (
+      req.account.must_change_password &&
+      req.path !== "/change-password"
+    ) {
+      return res.status(403).json({
+        message: "Please change your temporary password first."
+      });
     }
 
     next();
   };
-}
-
-export const requireCoordinator = requireRole("coordinator");
-
-export const requireCandidate = requireRole("candidate");
-
-export function requirePasswordChangeComplete(req, res, next) {
-  if (!req.user) {
-    unauthorized(res, "Authentication required.");
-    return;
-  }
-
-  if (req.user.mustChangePassword) {
-    res.status(403).json({
-      message: "Password change required.",
-      code: "PASSWORD_CHANGE_REQUIRED",
-    });
-    return;
-  }
-
-  next();
 }
