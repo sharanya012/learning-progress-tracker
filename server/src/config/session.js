@@ -33,6 +33,7 @@ export const sessionMiddleware = session({
   store: sessionStore,
   name: "lpt.sid",
   secret: process.env.SESSION_SECRET,
+  proxy: true,
   resave: false,
   saveUninitialized: false,
   rolling: true,
