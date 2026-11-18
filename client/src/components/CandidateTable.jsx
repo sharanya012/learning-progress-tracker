@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { apiRequest } from "../services/api";
 
 function CandidateTable({
@@ -8,7 +8,7 @@ function CandidateTable({
   onCandidateUpdated,
   onSessionRefresh
 }) {
-  const [expandedCandidateId, setExpandedCandidateId] = useState(null);
+  const [assignmentsCandidate, setAssignmentsCandidate] = useState(null);
   const [assignmentStates, setAssignmentStates] = useState({});
   const [accountCandidate, setAccountCandidate] = useState(null);
   const [cohort, setCohort] = useState("");
@@ -40,21 +40,85 @@ function CandidateTable({
         error: ""
       });
     } catch (error) {
+      if ([401, 403].includes(error.status)) {
+        await onSessionRefresh?.();
+      }
       updateAssignmentState(candidateId, { error: error.message });
     } finally {
       updateAssignmentState(candidateId, { loading: false });
     }
   }
 
-  function handleManageAssignments(candidateId) {
-    if (expandedCandidateId === candidateId) {
-      setExpandedCandidateId(null);
+  function handleManageAssignments(candidate) {
+    setAssignmentsCandidate(candidate);
+    const candidateId = candidate.id;
+    if (!assignmentStates[candidateId]?.loaded) {
+      loadAssignments(candidateId);
+    }
+  }
+
+  async function handleAddAssignmentClick(candidateId) {
+    const state = assignmentStates[candidateId] || {};
+    if (state.showAddForm) {
+      updateAssignmentState(candidateId, { showAddForm: false });
       return;
     }
 
-    setExpandedCandidateId(candidateId);
-    if (!assignmentStates[candidateId]?.loaded) {
-      loadAssignments(candidateId);
+    updateAssignmentState(candidateId, {
+      showAddForm: true,
+      activitiesLoading: true,
+      error: "",
+      message: ""
+    });
+
+    try {
+      const activities = await apiRequest("/coordinator/activities");
+      updateAssignmentState(candidateId, { activities });
+    } catch (error) {
+      if ([401, 403].includes(error.status)) {
+        await onSessionRefresh?.();
+      }
+      updateAssignmentState(candidateId, { error: error.message });
+    } finally {
+      updateAssignmentState(candidateId, { activitiesLoading: false });
+    }
+  }
+
+  async function handleAddAssignment(candidateId) {
+    const state = assignmentStates[candidateId] || {};
+    const activityId = Number(state.selectedActivityId);
+
+    if (!Number.isSafeInteger(activityId) || activityId <= 0) {
+      updateAssignmentState(candidateId, { error: "Select an activity to assign." });
+      return;
+    }
+
+    updateAssignmentState(candidateId, { saving: true, error: "", message: "" });
+
+    try {
+      await apiRequest("/coordinator/assignments", {
+        method: "POST",
+        body: JSON.stringify({ candidateId, activityId })
+      });
+
+      updateAssignmentState(candidateId, {
+        selectedActivityId: "",
+        showAddForm: false,
+        message: "Activity assigned successfully."
+      });
+
+      await loadAssignments(candidateId);
+      await onAssignmentsChange?.();
+    } catch (error) {
+      if ([401, 403].includes(error.status)) {
+        await onSessionRefresh?.();
+      }
+      updateAssignmentState(candidateId, {
+        error: error.message,
+        message: ""
+      });
+    } finally {
+      updateAssignmentState(candidateId, { saving: false });
     }
   }
 
@@ -99,6 +163,9 @@ function CandidateTable({
         });
       }
     } catch (error) {
+      if ([401, 403].includes(error.status)) {
+        await onSessionRefresh?.();
+      }
       updateAssignmentState(candidateId, { error: error.message });
     } finally {
       updateAssignmentState(candidateId, { deletingId: null });
@@ -166,6 +233,16 @@ function CandidateTable({
     }
   }
 
+  const currentAssignmentState = assignmentsCandidate
+    ? assignmentStates[assignmentsCandidate.id] || {}
+    : {};
+  const availableActivities = (currentAssignmentState.activities || []).filter(
+    (activity) =>
+      !currentAssignmentState.items?.some(
+        (assignment) => assignment.activity_id === activity.id
+      )
+  );
+
   return (
     <div className="table-card">
       <div className="section-heading">
@@ -192,133 +269,204 @@ function CandidateTable({
                 <td colSpan={manageAssignments ? 4 : 3}>No candidates found.</td>
               </tr>
             ) : (
-              candidates.map((candidate) => {
-                const assignmentState = assignmentStates[candidate.id] || {};
-                const expanded = expandedCandidateId === candidate.id;
+              candidates.map((candidate) => (
+                <tr key={candidate.id}>
+                  <td>
+                    <strong>{candidate.full_name}</strong>
+                    <small>{candidate.email}</small>
+                  </td>
 
-                return (
-                  <Fragment key={candidate.id}>
-                    <tr>
-                      <td>
-                        <strong>{candidate.full_name}</strong>
-                        <small>{candidate.email}</small>
-                      </td>
+                  <td>{candidate.assignments}</td>
 
-                      <td>{candidate.assignments}</td>
+                  <td>
+                    <div className="progress-container">
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill"
+                          style={{ width: `${candidate.progress}%` }}
+                        />
+                      </div>
+                      <span>{candidate.progress}%</span>
+                    </div>
+                  </td>
 
-                      <td>
-                        <div className="progress-container">
-                          <div className="progress-bar">
-                            <div
-                              className="progress-fill"
-                              style={{ width: `${candidate.progress}%` }}
-                            />
-                          </div>
-                          <span>{candidate.progress}%</span>
-                        </div>
-                      </td>
-
-                      {manageAssignments && (
-                        <td>
-                          <div className="candidate-row-actions">
-                            <button
-                              className="secondary-button manage-assignments-button"
-                              type="button"
-                              aria-expanded={expanded}
-                              aria-controls={`candidate-assignments-${candidate.id}`}
-                              onClick={() => handleManageAssignments(candidate.id)}
-                            >
-                              {expanded ? "Close Assignments" : "Manage Assignments"}
-                            </button>
-                            <button
-                              className="secondary-button manage-account-button"
-                              type="button"
-                              onClick={() => handleManageAccount(candidate)}
-                            >
-                              Manage Account
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-
-                    {manageAssignments && expanded && (
-                      <tr>
-                        <td
-                          id={`candidate-assignments-${candidate.id}`}
-                          className="managed-assignments-cell"
-                          colSpan="4"
+                  {manageAssignments && (
+                    <td>
+                      <div className="candidate-row-actions">
+                        <button
+                          className="secondary-button manage-assignments-button"
+                          type="button"
+                          onClick={() => handleManageAssignments(candidate)}
                         >
-                          {assignmentState.loading ? (
-                            <p>Loading assignments...</p>
-                          ) : assignmentState.error && !assignmentState.loaded ? (
-                            <p className="error-message" role="alert">
-                              {assignmentState.error}
-                            </p>
-                          ) : assignmentState.items?.length ? (
-                            <div className="managed-assignments-list">
-                              {assignmentState.items.map((assignment) => (
-                                <article
-                                  className="managed-assignment"
-                                  key={assignment.assignment_id}
-                                >
-                                  <div>
-                                    <strong>{assignment.title}</strong>
-                                    <span>Track: {assignment.track}</span>
-                                    <span>
-                                      Planned hours: {assignment.planned_hours}
-                                    </span>
-                                    <span>
-                                      Status: {assignment.status
-                                        ? assignment.status.replaceAll("_", " ")
-                                        : "Unknown"}
-                                    </span>
-                                    <div className="managed-assignment-progress">
-                                      <div
-                                        className="progress-bar"
-                                        aria-label={`Progress: ${assignment.progress}%`}
-                                      >
-                                        <div
-                                          className="progress-fill"
-                                          style={{ width: `${assignment.progress}%` }}
-                                        />
-                                      </div>
-                                      <span>{assignment.progress}%</span>
-                                    </div>
-                                  </div>
-                                  <button
-                                    className="delete-assignment-button"
-                                    type="button"
-                                    disabled={Boolean(assignmentState.deletingId)}
-                                    onClick={() =>
-                                      handleDeleteAssignment(candidate.id, assignment)
-                                    }
-                                  >
-                                    {assignmentState.deletingId === assignment.assignment_id
-                                      ? "Deleting..."
-                                      : "Delete"}
-                                  </button>
-                                </article>
-                              ))}
-                            </div>
-                          ) : (
-                            <p>No assignments yet</p>
-                          )}
-                          {assignmentState.error && assignmentState.loaded && (
-                            <p className="error-message" role="alert">
-                              {assignmentState.error}
-                            </p>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })
+                          Manage Assignments
+                        </button>
+                        <button
+                          className="secondary-button manage-account-button"
+                          type="button"
+                          onClick={() => handleManageAccount(candidate)}
+                        >
+                          Manage Account
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))
             )}
           </tbody>
         </table>
       </div>
+
+      {assignmentsCandidate && (
+        <div className="account-modal-backdrop">
+          <section
+            className="account-modal assignments-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manage-assignments-title"
+          >
+            <div className="account-modal-heading">
+              <div>
+                <h2 id="manage-assignments-title">Manage Assignments</h2>
+                <p>{assignmentsCandidate.full_name}</p>
+              </div>
+              <button
+                className="activity-close-button"
+                type="button"
+                aria-label="Close manage assignments"
+                onClick={() => setAssignmentsCandidate(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            {currentAssignmentState.loading ? (
+              <p>Loading assignments...</p>
+            ) : currentAssignmentState.items?.length ? (
+              <div className="managed-assignments-list">
+                {currentAssignmentState.items.map((assignment) => (
+                  <article
+                    className="managed-assignment"
+                    key={assignment.assignment_id}
+                  >
+                    <div>
+                      <strong>{assignment.title}</strong>
+                      <span>Track: {assignment.track}</span>
+                      <span>Planned hours: {assignment.planned_hours}</span>
+                      <span>
+                        Status: {assignment.status
+                          ? assignment.status.replaceAll("_", " ")
+                          : "Unknown"}
+                      </span>
+                      <div className="managed-assignment-progress">
+                        <div
+                          className="progress-bar"
+                          aria-label={`Progress: ${assignment.progress}%`}
+                        >
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${assignment.progress}%` }}
+                          />
+                        </div>
+                        <span>{assignment.progress}%</span>
+                      </div>
+                    </div>
+                    <button
+                      className="delete-assignment-button"
+                      type="button"
+                      disabled={Boolean(
+                        currentAssignmentState.deletingId ||
+                        currentAssignmentState.saving
+                      )}
+                      onClick={() =>
+                        handleDeleteAssignment(assignmentsCandidate.id, assignment)
+                      }
+                    >
+                      {currentAssignmentState.deletingId === assignment.assignment_id
+                        ? "Deleting..."
+                        : "Delete"}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="managed-assignments-empty">No assignments yet</p>
+            )}
+
+            {currentAssignmentState.error && (
+              <p className="error-message" role="alert">
+                {currentAssignmentState.error}
+              </p>
+            )}
+            {currentAssignmentState.message && (
+              <p className="success-message" role="status">
+                {currentAssignmentState.message}
+              </p>
+            )}
+
+            <div className="add-assignment-actions">
+              <button
+                className="add-activity-btn"
+                type="button"
+                disabled={Boolean(
+                  currentAssignmentState.saving || currentAssignmentState.deletingId
+                )}
+                onClick={() => handleAddAssignmentClick(assignmentsCandidate.id)}
+              >
+                {currentAssignmentState.showAddForm ? "Cancel" : "Add Assignment"}
+              </button>
+            </div>
+
+            {currentAssignmentState.showAddForm && (
+              <div className="add-assignment-form">
+                {currentAssignmentState.activitiesLoading ? (
+                  <p>Loading activities...</p>
+                ) : (
+                  <>
+                    <label htmlFor="candidate-activity-select">Activity</label>
+                    <select
+                      id="candidate-activity-select"
+                      value={currentAssignmentState.selectedActivityId || ""}
+                      onChange={(event) =>
+                        updateAssignmentState(assignmentsCandidate.id, {
+                          selectedActivityId: event.target.value,
+                          error: ""
+                        })
+                      }
+                    >
+                      <option value="">Select an activity</option>
+                      {availableActivities.map((activity) => (
+                        <option key={activity.id} value={activity.id}>
+                          {activity.title} - {activity.track}
+                        </option>
+                      ))}
+                    </select>
+                    {!currentAssignmentState.activities?.length ? (
+                      <p>No activities available yet.</p>
+                    ) : !availableActivities.length ? (
+                      <p>All available activities are already assigned.</p>
+                    ) : null}
+                    <button
+                      className="add-activity-btn"
+                      type="button"
+                      disabled={Boolean(
+                        currentAssignmentState.saving ||
+                        currentAssignmentState.deletingId ||
+                        !currentAssignmentState.selectedActivityId
+                      )}
+                      onClick={() => handleAddAssignment(assignmentsCandidate.id)}
+                    >
+                      {currentAssignmentState.saving
+                        ? "Assigning..."
+                        : "Assign Activity"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {accountCandidate && (
         <div className="account-modal-backdrop">
