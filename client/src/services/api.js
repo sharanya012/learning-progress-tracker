@@ -24,18 +24,30 @@ export async function apiRequest(path, options = {}) {
     }
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    method,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
-      ...options.headers
-    }
-  });
+  const sendRequest = () =>
+    fetch(`${API_URL}${path}`, {
+      ...options,
+      method,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+        ...options.headers
+      }
+    });
 
-  const data = await response.json();
+  let response = await sendRequest();
+  let data = await response.json();
+
+  if (
+    response.status === 403 &&
+    data.message === "Invalid or missing CSRF token." &&
+    !["GET", "HEAD", "OPTIONS"].includes(method)
+  ) {
+    await getCsrfToken();
+    response = await sendRequest();
+    data = await response.json();
+  }
 
   if (!response.ok) {
     const error = new Error(data.message || "Request failed.");
