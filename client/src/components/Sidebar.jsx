@@ -1,7 +1,8 @@
 const coordinatorMenuItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "candidates", label: "Candidates" },
-  { id: "activities", label: "Activities" }
+  { id: "activities", label: "Activities" },
+  { id: "assignments", label: "Assignments" }
 ];
 
 function Sidebar({

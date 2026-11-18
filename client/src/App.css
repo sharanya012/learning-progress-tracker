@@ -280,16 +280,6 @@ td small {
   box-shadow: 0 16px 48px rgb(31 29 44 / 18%);
 }
 
-.assignments-modal {
-  width: min(100%, 760px);
-}
-
-.assignments-modal .account-modal-heading p {
-  margin: 6px 0 0;
-  color: #898797;
-  font-size: 13px;
-}
-
 .account-modal-heading {
   display: flex;
   align-items: center;
@@ -357,7 +347,11 @@ td small {
   margin: 14px 0 0;
 }
 
-.managed-assignments-empty {
+.managed-assignments-cell {
+  background: #faf9fd;
+}
+
+.managed-assignments-cell > p {
   margin: 4px 0;
   color: #777587;
 }
@@ -381,7 +375,7 @@ td small {
 
 .managed-assignment > div {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
   align-items: center;
   gap: 8px 16px;
   flex: 1;
@@ -408,50 +402,6 @@ td small {
   width: 100px;
 }
 
-.add-assignment-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
-.add-assignment-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 14px;
-  border: 1px solid #eeeef3;
-  border-radius: 9px;
-  background: #faf9fd;
-}
-
-.add-assignment-form label {
-  align-self: center;
-  font-size: 13px;
-  font-weight: bold;
-}
-
-.add-assignment-form select {
-  min-width: 0;
-  flex: 1;
-  padding: 10px 12px;
-  border: 1px solid #dedde7;
-  border-radius: 7px;
-  background: white;
-  font: inherit;
-}
-
-.add-assignment-form > p {
-  flex: 1;
-  margin: 0;
-  color: #777587;
-  font-size: 13px;
-}
-
-.add-assignment-form > .add-activity-btn {
-  white-space: nowrap;
-}
-
 .delete-assignment-button {
   padding: 8px 12px;
   border: 1px solid #f0caca;
@@ -476,11 +426,6 @@ td small {
 
   .managed-assignment > div {
     grid-template-columns: repeat(2, minmax(100px, 1fr));
-  }
-
-  .add-assignment-form {
-    align-items: stretch;
-    flex-direction: column;
   }
 }
 
