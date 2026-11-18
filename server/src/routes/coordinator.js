@@ -54,6 +54,88 @@ router.get("/candidates", async (req, res, next) => {
   }
 });
 
+// List a candidate's assignments
+router.get("/candidates/:candidateId/assignments", async (req, res, next) => {
+  try {
+    const candidateId = Number(req.params.candidateId);
+
+    if (!Number.isSafeInteger(candidateId) || candidateId <= 0) {
+      return res.status(400).json({ message: "Invalid candidate ID." });
+    }
+
+    const candidate = await pool.query(
+      "SELECT id FROM candidates WHERE id = $1",
+      [candidateId]
+    );
+
+    if (!candidate.rowCount) {
+      return res.status(404).json({ message: "Candidate not found." });
+    }
+
+    const result = await pool.query(
+      `SELECT
+         asg.id AS assignment_id,
+         asg.status,
+         asg.progress,
+         act.title,
+         act.track,
+         act.planned_hours
+       FROM assignments asg
+       JOIN activities act ON act.id = asg.activity_id
+       WHERE asg.candidate_id = $1
+       ORDER BY act.title`,
+      [candidateId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Delete one assignment without deleting its candidate or activity
+router.delete(
+  "/candidates/:candidateId/assignments/:assignmentId",
+  async (req, res, next) => {
+    try {
+      const candidateId = Number(req.params.candidateId);
+      const assignmentId = Number(req.params.assignmentId);
+
+      if (!Number.isSafeInteger(candidateId) || candidateId <= 0) {
+        return res.status(400).json({ message: "Invalid candidate ID." });
+      }
+
+      if (!Number.isSafeInteger(assignmentId) || assignmentId <= 0) {
+        return res.status(400).json({ message: "Invalid assignment ID." });
+      }
+
+      const result = await pool.query(
+        `DELETE FROM assignments
+         WHERE id = $1 AND candidate_id = $2
+         RETURNING id`,
+        [assignmentId, candidateId]
+      );
+
+      if (!result.rowCount) {
+        const candidate = await pool.query(
+          "SELECT id FROM candidates WHERE id = $1",
+          [candidateId]
+        );
+
+        if (!candidate.rowCount) {
+          return res.status(404).json({ message: "Candidate not found." });
+        }
+
+        return res.status(404).json({ message: "Assignment not found." });
+      }
+
+      res.json({ message: "Assignment deleted successfully." });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // Create candidate account
 router.post("/candidates", async (req, res, next) => {
   const client = await pool.connect();

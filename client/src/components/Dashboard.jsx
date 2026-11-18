@@ -64,6 +64,22 @@ function Dashboard({ onSessionRefresh, onLogout }) {
     loadDashboard();
   }, [onSessionRefresh]);
 
+  async function refreshAssignmentDashboard() {
+    try {
+      const [dashboardData, candidateData] = await Promise.all([
+        apiRequest("/coordinator/dashboard"),
+        apiRequest("/coordinator/candidates")
+      ]);
+      setStats(dashboardData);
+      setCandidates(candidateData);
+    } catch (err) {
+      if ([401, 403].includes(err.status)) {
+        await onSessionRefresh();
+      }
+      throw err;
+    }
+  }
+
   useEffect(() => {
     if (!["activities", "assignments"].includes(activePage)) return;
 
@@ -603,7 +619,11 @@ function Dashboard({ onSessionRefresh, onLogout }) {
             ) : error ? (
               <p className="error-message" role="alert">{error}</p>
             ) : (
-              <CandidateTable candidates={candidates} />
+              <CandidateTable
+                candidates={candidates}
+                manageAssignments
+                onAssignmentsChange={refreshAssignmentDashboard}
+              />
             )}
           </>
         ) : activePage === "assignments" ? (

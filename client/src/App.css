@@ -243,6 +243,93 @@ td small {
   font-size: 11px;
 }
 
+.manage-assignments-button {
+  padding: 8px 11px;
+  white-space: nowrap;
+}
+
+.managed-assignments-cell {
+  background: #faf9fd;
+}
+
+.managed-assignments-cell > p {
+  margin: 4px 0;
+  color: #777587;
+}
+
+.managed-assignments-list {
+  display: grid;
+}
+
+.managed-assignment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 0;
+  border-bottom: 1px solid #eeeeF3;
+}
+
+.managed-assignment:last-child {
+  border-bottom: 0;
+}
+
+.managed-assignment > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
+  align-items: center;
+  gap: 8px 16px;
+  flex: 1;
+}
+
+.managed-assignment > div > strong {
+  grid-column: 1 / -1;
+}
+
+.managed-assignment > div > span {
+  color: #777587;
+  font-size: 12px;
+}
+
+.managed-assignment-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #777587;
+  font-size: 12px;
+}
+
+.managed-assignment-progress .progress-bar {
+  width: 100px;
+}
+
+.delete-assignment-button {
+  padding: 8px 12px;
+  border: 1px solid #f0caca;
+  border-radius: 7px;
+  background: #fff8f8;
+  color: #b44343;
+  font: inherit;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.delete-assignment-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+@media (max-width: 700px) {
+  .managed-assignment {
+    align-items: flex-start;
+  }
+
+  .managed-assignment > div {
+    grid-template-columns: repeat(2, minmax(100px, 1fr));
+  }
+}
+
 .progress-container {
   display: flex;
   align-items: center;
