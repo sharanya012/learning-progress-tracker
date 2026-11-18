@@ -80,6 +80,16 @@ function Dashboard({ onSessionRefresh, onLogout }) {
     }
   }
 
+  function handleCandidateUpdated(updatedCandidate) {
+    setCandidates((currentCandidates) =>
+      currentCandidates.map((candidate) =>
+        candidate.id === updatedCandidate.id
+          ? { ...candidate, ...updatedCandidate }
+          : candidate
+      )
+    );
+  }
+
   useEffect(() => {
     if (!["activities", "assignments"].includes(activePage)) return;
 
@@ -623,6 +633,8 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                 candidates={candidates}
                 manageAssignments
                 onAssignmentsChange={refreshAssignmentDashboard}
+                onCandidateUpdated={handleCandidateUpdated}
+                onSessionRefresh={onSessionRefresh}
               />
             )}
           </>

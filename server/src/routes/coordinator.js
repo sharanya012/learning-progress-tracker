@@ -136,6 +136,41 @@ router.delete(
   }
 );
 
+// Update a candidate's cohort
+router.patch("/candidates/:id", async (req, res, next) => {
+  try {
+    const candidateId = Number(req.params.id);
+    const cohort = req.body.cohort;
+
+    if (!Number.isSafeInteger(candidateId) || candidateId <= 0) {
+      return res.status(400).json({ message: "Invalid candidate ID." });
+    }
+
+    if (typeof cohort !== "string" || !cohort.trim() || cohort.trim().length > 100) {
+      return res.status(400).json({
+        message: "Cohort is required and must be 100 characters or fewer."
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE candidates c
+       SET cohort = $1
+       FROM accounts a
+       WHERE c.id = $2 AND a.id = c.account_id
+       RETURNING c.id, c.full_name, c.cohort, a.email`,
+      [cohort.trim(), candidateId]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ message: "Candidate not found." });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Create candidate account
 router.post("/candidates", async (req, res, next) => {
   const client = await pool.connect();
@@ -286,7 +321,7 @@ router.post("/candidates/:id/reset-password", async (req, res, next) => {
   try {
     const candidateId = Number(req.params.id);
 
-    if (!Number.isInteger(candidateId) || candidateId <= 0) {
+    if (!Number.isSafeInteger(candidateId) || candidateId <= 0) {
       return res.status(400).json({ message: "Invalid candidate ID." });
     }
 
