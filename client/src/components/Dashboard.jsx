@@ -32,11 +32,6 @@ function Dashboard({ onSessionRefresh, onLogout }) {
   const [candidateSaving, setCandidateSaving] = useState(false);
   const [candidateError, setCandidateError] = useState("");
   const [createdCredentials, setCreatedCredentials] = useState(null);
-  const [selectedCandidate, setSelectedCandidate] = useState("");
-  const [selectedActivity, setSelectedActivity] = useState("");
-  const [assignmentSaving, setAssignmentSaving] = useState(false);
-  const [assignmentError, setAssignmentError] = useState("");
-  const [assignmentMessage, setAssignmentMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [logoutError, setLogoutError] = useState("");
@@ -91,7 +86,7 @@ function Dashboard({ onSessionRefresh, onLogout }) {
   }
 
   useEffect(() => {
-    if (!["activities", "assignments"].includes(activePage)) return;
+    if (activePage !== "activities") return;
 
     async function loadActivities() {
       setActivitiesLoading(true);
@@ -214,57 +209,6 @@ function Dashboard({ onSessionRefresh, onLogout }) {
     }
   }
 
-  async function handleAssignmentSubmit(event) {
-    event.preventDefault();
-    setAssignmentError("");
-    setAssignmentMessage("");
-
-    const candidateId = Number(selectedCandidate);
-    const activityId = Number(selectedActivity);
-
-    if (!Number.isInteger(candidateId) || candidateId <= 0 ||
-        !Number.isInteger(activityId) || activityId <= 0) {
-      setAssignmentError("Select both a candidate and an activity.");
-      return;
-    }
-
-    setAssignmentSaving(true);
-
-    try {
-      await apiRequest("/coordinator/assignments", {
-        method: "POST",
-        body: JSON.stringify({ candidateId, activityId })
-      });
-
-      setAssignmentMessage("Activity assigned successfully.");
-      setSelectedCandidate("");
-      setSelectedActivity("");
-
-      try {
-        const [dashboardData, candidateData] = await Promise.all([
-          apiRequest("/coordinator/dashboard"),
-          apiRequest("/coordinator/candidates")
-        ]);
-        setStats(dashboardData);
-        setCandidates(candidateData);
-      } catch (refreshError) {
-        if ([401, 403].includes(refreshError.status)) {
-          await onSessionRefresh();
-        }
-        setAssignmentError(
-          `Activity assigned, but the dashboard could not be refreshed: ${refreshError.message}`
-        );
-      }
-    } catch (err) {
-      if ([401, 403].includes(err.status)) {
-        await onSessionRefresh();
-      }
-      setAssignmentError(err.message);
-    } finally {
-      setAssignmentSaving(false);
-    }
-  }
-
   async function handleLogout() {
     setLogoutError("");
 
@@ -285,8 +229,6 @@ function Dashboard({ onSessionRefresh, onLogout }) {
           setShowActivityForm(false);
           setShowCandidateForm(false);
           setCandidateError("");
-          setAssignmentError("");
-          setAssignmentMessage("");
         }}
       />
 
@@ -298,9 +240,7 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                 ? "Activities"
                 : activePage === "candidates"
                   ? "Candidates"
-                  : activePage === "assignments"
-                    ? "Assignments"
-                    : "Dashboard"}
+                  : "Dashboard"}
             </h2>
             <p>Welcome back, Coordinator!</p>
           </div>
@@ -637,85 +577,6 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                 onSessionRefresh={onSessionRefresh}
               />
             )}
-          </>
-        ) : activePage === "assignments" ? (
-          <>
-            <section className="welcome-section">
-              <div>
-                <h1>Assign an Activity</h1>
-                <p>Choose a candidate and an activity to assign.</p>
-              </div>
-            </section>
-
-            <form className="activity-form" onSubmit={handleAssignmentSubmit}>
-              <h3>New Assignment</h3>
-              {activitiesLoading ? (
-                <p>Loading activities...</p>
-              ) : (
-                <>
-                  {activityError && (
-                    <p className="error-message" role="alert">{activityError}</p>
-                  )}
-                  {error && (
-                    <p className="error-message" role="alert">{error}</p>
-                  )}
-                  {loading && <p>Loading candidates...</p>}
-                  <label htmlFor="assignment-candidate">Candidate</label>
-                  <select
-                    id="assignment-candidate"
-                    value={selectedCandidate}
-                    onChange={(event) => setSelectedCandidate(event.target.value)}
-                    required
-                  >
-                    <option value="">Select a candidate</option>
-                    {candidates.map((candidate) => (
-                      <option key={candidate.id} value={candidate.id}>
-                        {candidate.full_name} ({candidate.email})
-                      </option>
-                    ))}
-                  </select>
-
-                  <label htmlFor="assignment-activity">Activity</label>
-                  <select
-                    id="assignment-activity"
-                    value={selectedActivity}
-                    onChange={(event) => setSelectedActivity(event.target.value)}
-                    required
-                  >
-                    <option value="">Select an activity</option>
-                    {activities.map((activity) => (
-                      <option key={activity.id} value={activity.id}>
-                        {activity.title} - {activity.track}
-                      </option>
-                    ))}
-                  </select>
-
-                  {assignmentError && (
-                    <p className="error-message" role="alert">{assignmentError}</p>
-                  )}
-                  {assignmentMessage && (
-                    <p className="success-message" role="status">{assignmentMessage}</p>
-                  )}
-
-                  {!loading && candidates.length === 0 && (
-                    <p>Add a candidate before creating an assignment.</p>
-                  )}
-                  {activities.length === 0 && (
-                    <p>Add an activity before creating an assignment.</p>
-                  )}
-
-                  <div className="activity-form-actions">
-                    <button
-                      className="add-activity-btn"
-                      type="submit"
-                      disabled={assignmentSaving || loading || candidates.length === 0 || activities.length === 0}
-                    >
-                      {assignmentSaving ? "Assigning..." : "Assign Activity"}
-                    </button>
-                  </div>
-                </>
-              )}
-            </form>
           </>
         ) : (
           <>

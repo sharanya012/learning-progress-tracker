@@ -75,6 +75,7 @@ router.get("/candidates/:candidateId/assignments", async (req, res, next) => {
     const result = await pool.query(
       `SELECT
          asg.id AS assignment_id,
+         act.id AS activity_id,
          asg.status,
          asg.progress,
          act.title,
