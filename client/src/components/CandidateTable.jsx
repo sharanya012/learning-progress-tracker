@@ -6,6 +6,7 @@ function CandidateTable({
   manageAssignments = false,
   onAssignmentsChange,
   onCandidateUpdated,
+  onCandidateDeleted,
   onSessionRefresh
 }) {
   const [assignmentsCandidate, setAssignmentsCandidate] = useState(null);
@@ -15,6 +16,7 @@ function CandidateTable({
   const [accountError, setAccountError] = useState("");
   const [cohortSaving, setCohortSaving] = useState(false);
   const [passwordResetting, setPasswordResetting] = useState(false);
+  const [candidateDeactivating, setCandidateDeactivating] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState("");
 
   function updateAssignmentState(candidateId, update) {
@@ -230,6 +232,35 @@ function CandidateTable({
       setAccountError(error.message);
     } finally {
       setPasswordResetting(false);
+    }
+  }
+
+  async function handleDeactivateCandidate() {
+    if (
+      !window.confirm(
+        "Confirm action: Candidate records will be deleted and this action cannot be reverted."
+      )
+    ) {
+      return;
+    }
+
+    setAccountError("");
+    setCandidateDeactivating(true);
+
+    try {
+      await apiRequest(`/coordinator/candidates/${accountCandidate.id}`, {
+        method: "DELETE"
+      });
+      const deletedCandidateId = accountCandidate.id;
+      setAccountCandidate(null);
+      await onCandidateDeleted?.(deletedCandidateId);
+    } catch (error) {
+      if ([401, 403].includes(error.status)) {
+        await onSessionRefresh?.();
+      }
+      setAccountError(error.message);
+    } finally {
+      setCandidateDeactivating(false);
     }
   }
 
@@ -483,6 +514,7 @@ function CandidateTable({
                 type="button"
                 aria-label="Close manage account"
                 onClick={() => setAccountCandidate(null)}
+                disabled={candidateDeactivating}
               >
                 ×
               </button>
@@ -500,13 +532,17 @@ function CandidateTable({
                   maxLength="100"
                   value={cohort}
                   onChange={(event) => setCohort(event.target.value)}
-                  disabled={cohortSaving}
+                  disabled={cohortSaving || candidateDeactivating}
                   required
                 />
                 <button
                   className="add-activity-btn"
                   type="submit"
-                  disabled={cohortSaving || cohort.trim() === accountCandidate.cohort}
+                  disabled={
+                    cohortSaving ||
+                    candidateDeactivating ||
+                    cohort.trim() === accountCandidate.cohort
+                  }
                 >
                   {cohortSaving ? "Saving..." : "Save"}
                 </button>
@@ -518,7 +554,7 @@ function CandidateTable({
                 className="secondary-button"
                 type="button"
                 onClick={handlePasswordReset}
-                disabled={passwordResetting}
+                disabled={passwordResetting || candidateDeactivating}
               >
                 {passwordResetting ? "Resetting..." : "Reset Password"}
               </button>
@@ -532,6 +568,17 @@ function CandidateTable({
                   <code>{temporaryPassword}</code>
                 </div>
               )}
+            </div>
+
+            <div className="account-deactivate-section">
+              <button
+                className="delete-assignment-button"
+                type="button"
+                onClick={handleDeactivateCandidate}
+                disabled={candidateDeactivating || cohortSaving || passwordResetting}
+              >
+                {candidateDeactivating ? "Deactivating..." : "Deactivate Candidate"}
+              </button>
             </div>
 
             {accountError && (

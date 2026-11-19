@@ -21,6 +21,8 @@ function Dashboard({ onSessionRefresh, onLogout }) {
   const [activityTopic, setActivityTopic] = useState("");
   const [activityDescription, setActivityDescription] = useState("");
   const [plannedHours, setPlannedHours] = useState("");
+  const [editingActivityId, setEditingActivityId] = useState(null);
+  const [activityDeletingId, setActivityDeletingId] = useState(null);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [activitiesReloadKey, setActivitiesReloadKey] = useState(0);
   const [activitySaving, setActivitySaving] = useState(false);
@@ -110,7 +112,26 @@ function Dashboard({ onSessionRefresh, onLogout }) {
 
   function openActivities() {
     setActivePage("activities");
+    openActivityForm();
+  }
+
+  function openActivityForm(activity = null) {
+    setEditingActivityId(activity?.id ?? null);
+    setActivityTitle(activity?.title ?? "");
+    setActivityTopic(activity?.track ?? "");
+    setActivityDescription(activity?.description ?? "");
+    setPlannedHours(activity?.planned_hours ?? "");
+    setActivityError("");
     setShowActivityForm(true);
+  }
+
+  function closeActivityForm() {
+    setShowActivityForm(false);
+    setEditingActivityId(null);
+    setActivityTitle("");
+    setActivityTopic("");
+    setActivityDescription("");
+    setPlannedHours("");
     setActivityError("");
   }
 
@@ -123,28 +144,29 @@ function Dashboard({ onSessionRefresh, onLogout }) {
     const hours = Number(plannedHours);
 
     if (!title || !topic || !Number.isFinite(hours) || hours <= 0) {
-      setActivityError("Enter a title, topic and planned hours greater than zero.");
+      setActivityError("Enter a title, track and planned hours greater than zero.");
       return;
     }
 
     setActivitySaving(true);
 
     try {
-      await apiRequest("/coordinator/activities", {
-        method: "POST",
-        body: JSON.stringify({
-          title,
-          description: activityDescription.trim(),
-          track: topic,
-          plannedHours: hours
-        })
-      });
+      await apiRequest(
+        editingActivityId
+          ? `/coordinator/activities/${editingActivityId}`
+          : "/coordinator/activities",
+        {
+          method: editingActivityId ? "PATCH" : "POST",
+          body: JSON.stringify({
+            title,
+            description: activityDescription.trim(),
+            track: topic,
+            plannedHours: hours
+          })
+        }
+      );
 
-      setActivityTitle("");
-      setActivityTopic("");
-      setActivityDescription("");
-      setPlannedHours("");
-      setShowActivityForm(false);
+      closeActivityForm();
       const activityData = await apiRequest("/coordinator/activities");
       setActivities(activityData);
     } catch (err) {
@@ -154,6 +176,51 @@ function Dashboard({ onSessionRefresh, onLogout }) {
       setActivityError(err.message);
     } finally {
       setActivitySaving(false);
+    }
+  }
+
+  async function handleActivityDelete(activity) {
+    if (
+      !window.confirm(
+        `Delete "${activity.title}"? This will also remove its candidate assignments.`
+      )
+    ) {
+      return;
+    }
+
+    setActivityDeletingId(activity.id);
+    setActivityError("");
+
+    try {
+      await apiRequest(`/coordinator/activities/${activity.id}`, {
+        method: "DELETE"
+      });
+      setActivities((currentActivities) =>
+        currentActivities.filter((currentActivity) => currentActivity.id !== activity.id)
+      );
+
+      try {
+        const [activityData, dashboardData, candidateData] = await Promise.all([
+          apiRequest("/coordinator/activities"),
+          apiRequest("/coordinator/dashboard"),
+          apiRequest("/coordinator/candidates")
+        ]);
+        setActivities(activityData);
+        setStats(dashboardData);
+        setCandidates(candidateData);
+      } catch (refreshError) {
+        setActivityError(
+          `Activity deleted, but the lists could not be refreshed: ${refreshError.message}`
+        );
+        return;
+      }
+    } catch (err) {
+      if ([401, 403].includes(err.status)) {
+        await onSessionRefresh();
+      }
+      setActivityError(err.message);
+    } finally {
+      setActivityDeletingId(null);
     }
   }
 
@@ -206,6 +273,29 @@ function Dashboard({ onSessionRefresh, onLogout }) {
       setCandidateError(err.message);
     } finally {
       setCandidateSaving(false);
+    }
+  }
+
+  async function handleCandidateDeleted(candidateId) {
+    setCandidateError("");
+    setCandidates((currentCandidates) =>
+      currentCandidates.filter((candidate) => candidate.id !== candidateId)
+    );
+
+    try {
+      const [dashboardData, candidateData] = await Promise.all([
+        apiRequest("/coordinator/dashboard"),
+        apiRequest("/coordinator/candidates")
+      ]);
+      setStats(dashboardData);
+      setCandidates(candidateData);
+    } catch (err) {
+      if ([401, 403].includes(err.status)) {
+        await onSessionRefresh();
+      }
+      setCandidateError(
+        `Candidate deleted, but the list could not be refreshed: ${err.message}`
+      );
     }
   }
 
@@ -263,10 +353,7 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                 <button
                   className="add-activity-btn"
                   type="button"
-                  onClick={() => {
-                    setActivityError("");
-                    setShowActivityForm(true);
-                  }}
+                  onClick={() => openActivityForm()}
                 >
                   <span aria-hidden="true">+</span> Create activity
                 </button>
@@ -300,17 +387,14 @@ function Dashboard({ onSessionRefresh, onLogout }) {
               <section className="activity-editor">
                 <div className="activity-editor-heading">
                   <div>
-                    <h2>Create a learning activity</h2>
+                    <h2>{editingActivityId ? "Edit learning activity" : "Create a learning activity"}</h2>
                     <p>Add the details candidates need to get started.</p>
                   </div>
                   <button
                     className="activity-close-button"
                     type="button"
                     aria-label="Close activity form"
-                    onClick={() => {
-                      setShowActivityForm(false);
-                      setActivityError("");
-                    }}
+                    onClick={closeActivityForm}
                     disabled={activitySaving}
                   >
                     ×
@@ -382,10 +466,7 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                     <button
                       className="secondary-button"
                       type="button"
-                      onClick={() => {
-                        setShowActivityForm(false);
-                        setActivityError("");
-                      }}
+                      onClick={closeActivityForm}
                       disabled={activitySaving}
                     >
                       Cancel
@@ -395,7 +476,11 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                       type="submit"
                       disabled={activitySaving}
                     >
-                      {activitySaving ? "Saving..." : "Create activity"}
+                      {activitySaving
+                        ? "Saving..."
+                        : editingActivityId
+                          ? "Save changes"
+                          : "Create activity"}
                     </button>
                   </div>
                 </form>
@@ -438,7 +523,7 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                   <button
                     className="add-activity-btn"
                     type="button"
-                    onClick={() => setShowActivityForm(true)}
+                    onClick={() => openActivityForm()}
                   >
                     Create your first activity
                   </button>
@@ -464,6 +549,24 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                         <strong>{activity.planned_hours}</strong>
                         {" "}{Number(activity.planned_hours) === 1 ? "planned hour" : "planned hours"}
                       </span>
+                      <div className="coordinator-activity-actions">
+                        <button
+                          className="activity-action-button secondary-button"
+                          type="button"
+                          disabled={activitySaving || activityDeletingId !== null}
+                          onClick={() => openActivityForm(activity)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="activity-action-button delete-assignment-button"
+                          type="button"
+                          disabled={activitySaving || activityDeletingId !== null}
+                          onClick={() => handleActivityDelete(activity)}
+                        >
+                          {activityDeletingId === activity.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
                     </div>
                   </article>
                 ))}
@@ -574,6 +677,7 @@ function Dashboard({ onSessionRefresh, onLogout }) {
                 manageAssignments
                 onAssignmentsChange={refreshAssignmentDashboard}
                 onCandidateUpdated={handleCandidateUpdated}
+                onCandidateDeleted={handleCandidateDeleted}
                 onSessionRefresh={onSessionRefresh}
               />
             )}

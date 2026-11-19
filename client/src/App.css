@@ -347,6 +347,12 @@ td small {
   margin-top: 24px;
 }
 
+.account-deactivate-section {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #eeeef3;
+}
+
 .account-password-section .form-success {
   margin: 14px 0 0;
   padding: 14px;
@@ -1178,6 +1184,17 @@ td small {
   padding-top: 13px;
   border-top: 1px solid #f1f0f5;
   color: #777587;
+  font-size: 11px;
+}
+
+.coordinator-activity-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.activity-action-button {
+  padding: 6px 9px;
   font-size: 11px;
 }
 

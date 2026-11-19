@@ -172,6 +172,35 @@ router.patch("/candidates/:id", async (req, res, next) => {
   }
 });
 
+// Delete a candidate account and its related candidate records
+router.delete("/candidates/:id", async (req, res, next) => {
+  try {
+    const candidateId = Number(req.params.id);
+
+    if (!Number.isSafeInteger(candidateId) || candidateId <= 0) {
+      return res.status(400).json({ message: "Invalid candidate ID." });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM accounts
+       WHERE id = (
+         SELECT account_id FROM candidates WHERE id = $1
+       )
+       AND role = 'candidate'
+       RETURNING id`,
+      [candidateId]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ message: "Candidate not found." });
+    }
+
+    res.json({ message: "Candidate deleted successfully." });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Create candidate account
 router.post("/candidates", async (req, res, next) => {
   const client = await pool.connect();
@@ -275,6 +304,85 @@ router.get("/activities", async (req, res, next) => {
     );
 
     res.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update activity details
+router.patch("/activities/:id", async (req, res, next) => {
+  try {
+    const activityId = Number(req.params.id);
+    const { title, description, track, plannedHours } = req.body;
+    const hours = Number(plannedHours);
+
+    if (!Number.isSafeInteger(activityId) || activityId <= 0) {
+      return res.status(400).json({ message: "Invalid activity ID." });
+    }
+
+    if (
+      typeof title !== "string" ||
+      !title.trim() ||
+      title.trim().length > 200 ||
+      typeof track !== "string" ||
+      !track.trim() ||
+      track.trim().length > 100 ||
+      (description !== undefined && typeof description !== "string") ||
+      !Number.isFinite(hours) ||
+      hours < 0.01 ||
+      hours > 9999.99
+    ) {
+      return res.status(400).json({
+        message: "Valid title, track and planned hours are required."
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE activities
+       SET title = $1,
+           description = $2,
+           track = $3,
+           planned_hours = $4
+       WHERE id = $5
+       RETURNING *`,
+      [
+        title.trim(),
+        description || "",
+        track.trim(),
+        hours,
+        activityId
+      ]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ message: "Activity not found." });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Delete activity and its related assignments
+router.delete("/activities/:id", async (req, res, next) => {
+  try {
+    const activityId = Number(req.params.id);
+
+    if (!Number.isSafeInteger(activityId) || activityId <= 0) {
+      return res.status(400).json({ message: "Invalid activity ID." });
+    }
+
+    const result = await pool.query(
+      "DELETE FROM activities WHERE id = $1 RETURNING id",
+      [activityId]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ message: "Activity not found." });
+    }
+
+    res.json({ message: "Activity deleted successfully." });
   } catch (error) {
     next(error);
   }
