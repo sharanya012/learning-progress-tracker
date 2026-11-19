@@ -193,23 +193,35 @@ function CandidateTable({
     setAccountError("");
     setCohortSaving(true);
 
+    const requestController = new AbortController();
+    const timeoutId = window.setTimeout(() => requestController.abort(), 20000);
+
     try {
       const updatedCandidate = await apiRequest(
         `/coordinator/candidates/${accountCandidate.id}`,
         {
           method: "PATCH",
-          body: JSON.stringify({ cohort: updatedCohort })
+          body: JSON.stringify({ cohort: updatedCohort }),
+          signal: requestController.signal
         }
       );
       setAccountCandidate(updatedCandidate);
       setCohort(updatedCandidate.cohort);
       onCandidateUpdated?.(updatedCandidate);
     } catch (error) {
+      if (error.name === "AbortError") {
+        setAccountError(
+          "Saving the cohort timed out. Check whether it was updated before trying again."
+        );
+        return;
+      }
+
       if ([401, 403].includes(error.status)) {
         await onSessionRefresh?.();
       }
       setAccountError(error.message);
     } finally {
+      window.clearTimeout(timeoutId);
       setCohortSaving(false);
     }
   }
